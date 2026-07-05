@@ -1,0 +1,428 @@
+openapi: "3.1.0"
+
+info:
+  title: Dropshipping Service — Provider Orders API
+  description: >
+    API para que los proveedores visualicen y gestionen las órdenes dropshipping
+    que les han sido asignadas. Permite consultar órdenes, aceptarlas con fecha
+    estimada de despacho o rechazarlas con motivo.
+  version: "1.0.0"
+  contact:
+    name: Dropshipping Service Team
+    email: dev@ups.org
+
+servers:
+  - url: /api/v1
+    description: Default server base path
+
+tags:
+  - name: Provider Orders
+    description: Operaciones sobre órdenes asignadas al proveedor
+
+paths:
+
+  /providers/{providerId}/orders:
+    get:
+      summary: Obtener órdenes asignadas al proveedor
+      description: >
+        Devuelve la lista de órdenes dropshipping asignadas al proveedor indicado.
+        Solo el proveedor autenticado puede consultar sus propias órdenes.
+      operationId: getAssignedOrders
+      tags: [Provider Orders]
+      security:
+        - providerHeader: []
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          description: Identificador único del proveedor
+          schema:
+            type: string
+        - name: X-Provider-Id
+          in: header
+          required: true
+          description: >
+            Identificador del proveedor autenticado, inyectado por la capa de autenticación
+            preexistente (API Gateway). DEBE coincidir con el {providerId} de la ruta;
+            si no coincide el sistema retorna HTTP 403.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de órdenes asignadas (puede ser vacía)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderResponse'
+              example:
+                - id: "550e8400-e29b-41d4-a716-446655440000"
+                  orderCode: "ORD-20260704-001"
+                  status: PENDIENTE
+                  product:
+                    productCode: "PROD-001"
+                    description: "Auriculares Bluetooth inalámbricos"
+                    quantity: 2
+                  deliveryAddress:
+                    street: "Av. Principal 123, Piso 2"
+                    city: "Lima"
+                    state: "Lima"
+                    postalCode: "15001"
+                    country: "Perú"
+                  customerContact:
+                    name: "Juan Pérez"
+                    phone: "+51987654321"
+                    email: "juan.perez@example.com"
+                  expectedDeliveryDate: "2026-07-20"
+                  specialConditions: "Frágil - manejar con cuidado"
+        "401":
+          description: No autenticado
+        "403":
+          description: Prohibido — el proveedor solo puede ver sus propias órdenes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{orderId}/accept:
+    put:
+      summary: Aceptar una orden asignada
+      description: >
+        El proveedor acepta la orden proporcionando una fecha estimada de despacho.
+        La orden debe estar en estado PENDIENTE. La fecha debe ser hoy o en el futuro.
+      operationId: acceptOrder
+      tags: [Provider Orders]
+      security:
+        - providerHeader: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Identificador UUID de la orden
+          schema:
+            type: string
+            format: uuid
+        - name: X-Provider-Id
+          in: header
+          required: true
+          description: >
+            Identificador del proveedor autenticado. Se usa como `providerId` en la
+            lógica de negocio para cargar la orden con `findByIdAndProviderId`.
+            Retorna HTTP 404 si la orden no pertenece a este proveedor.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptOrderRequest'
+            example:
+              estimatedDispatchDate: "2026-07-10"
+      responses:
+        "200":
+          description: Orden aceptada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        "400":
+          description: Solicitud inválida (fecha no proporcionada o en el pasado)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INVALID_DISPATCH_DATE"
+                message: "La fecha estimada de despacho debe ser hoy o en el futuro"
+        "401":
+          description: No autenticado
+        "403":
+          description: Prohibido — la orden no está asignada a este proveedor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Orden no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Conflicto — la orden ya fue procesada (no está en PENDIENTE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "ORDER_ALREADY_PROCESSED"
+                message: "La orden ya fue aceptada o rechazada previamente"
+
+  /orders/{orderId}/reject:
+    put:
+      summary: Rechazar una orden asignada
+      description: >
+        El proveedor rechaza la orden indicando el motivo. La orden debe estar en estado
+        PENDIENTE. Al rechazar, el sistema notifica al equipo comercial de forma inmediata.
+      operationId: rejectOrder
+      tags: [Provider Orders]
+      security:
+        - providerHeader: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Identificador UUID de la orden
+          schema:
+            type: string
+            format: uuid
+        - name: X-Provider-Id
+          in: header
+          required: true
+          description: >
+            Identificador del proveedor autenticado. Se usa como `providerId` en la
+            lógica de negocio para cargar la orden con `findByIdAndProviderId`.
+            Retorna HTTP 404 si la orden no pertenece a este proveedor.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectOrderRequest'
+            example:
+              rejectionReason: "Producto sin stock disponible"
+      responses:
+        "200":
+          description: Orden rechazada exitosamente y equipo comercial notificado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        "400":
+          description: Solicitud inválida (motivo no proporcionado o vacío)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "REJECTION_REASON_REQUIRED"
+                message: "Se debe proporcionar un motivo de rechazo"
+        "401":
+          description: No autenticado
+        "403":
+          description: Prohibido — la orden no está asignada a este proveedor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Orden no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Conflicto — la orden ya fue procesada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+
+    OrderResponse:
+      type: object
+      description: Representación completa de una orden dropshipping
+      required:
+        - id
+        - orderCode
+        - status
+        - product
+        - deliveryAddress
+        - customerContact
+        - expectedDeliveryDate
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único de la orden
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        orderCode:
+          type: string
+          description: Código legible de negocio
+          example: "ORD-20260704-001"
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        product:
+          $ref: '#/components/schemas/ProductDetails'
+        deliveryAddress:
+          $ref: '#/components/schemas/DeliveryAddress'
+        customerContact:
+          $ref: '#/components/schemas/CustomerContact'
+        expectedDeliveryDate:
+          type: string
+          format: date
+          description: Fecha esperada de entrega al cliente
+          example: "2026-07-20"
+        specialConditions:
+          type: string
+          nullable: true
+          description: Condiciones especiales de manejo (puede ser nulo)
+          example: "Frágil - manejar con cuidado"
+        estimatedDispatchDate:
+          type: string
+          format: date
+          nullable: true
+          description: Fecha estimada de despacho (sólo presente si status=ACEPTADO)
+          example: "2026-07-10"
+        rejectionReason:
+          type: string
+          nullable: true
+          description: Motivo de rechazo (sólo presente si status=RECHAZADO)
+          example: "Producto sin stock disponible"
+        lastActionBy:
+          type: string
+          nullable: true
+          description: Identificador del proveedor que realizó la última acción
+          example: "prov-001"
+        lastActionAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp ISO-8601 de la última acción
+          example: "2026-07-04T14:30:00Z"
+
+    AcceptOrderRequest:
+      type: object
+      description: Datos requeridos para aceptar una orden
+      required:
+        - estimatedDispatchDate
+      properties:
+        estimatedDispatchDate:
+          type: string
+          format: date
+          description: Fecha estimada de despacho; debe ser hoy o en el futuro
+          example: "2026-07-10"
+
+    RejectOrderRequest:
+      type: object
+      description: Datos requeridos para rechazar una orden
+      required:
+        - rejectionReason
+      properties:
+        rejectionReason:
+          type: string
+          minLength: 1
+          description: Motivo del rechazo; no puede estar vacío
+          example: "Producto sin stock disponible"
+
+    OrderStatus:
+      type: string
+      description: Estado del ciclo de vida de la orden
+      enum:
+        - PENDIENTE
+        - ACEPTADO
+        - RECHAZADO
+
+    ProductDetails:
+      type: object
+      description: Información del producto solicitado
+      required:
+        - productCode
+        - description
+        - quantity
+      properties:
+        productCode:
+          type: string
+          description: Código único del producto
+          example: "PROD-001"
+        description:
+          type: string
+          description: Descripción del producto
+          example: "Auriculares Bluetooth inalámbricos"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Cantidad solicitada
+          example: 2
+
+    DeliveryAddress:
+      type: object
+      description: Dirección completa de entrega
+      required:
+        - street
+        - city
+        - state
+        - postalCode
+        - country
+      properties:
+        street:
+          type: string
+          description: Calle y número, incluyendo detalles de piso/departamento
+          example: "Av. Principal 123, Piso 2"
+        city:
+          type: string
+          example: "Lima"
+        state:
+          type: string
+          description: Departamento, provincia o estado
+          example: "Lima"
+        postalCode:
+          type: string
+          example: "15001"
+        country:
+          type: string
+          example: "Perú"
+
+    CustomerContact:
+      type: object
+      description: Datos de contacto del cliente
+      required:
+        - name
+        - phone
+      properties:
+        name:
+          type: string
+          description: Nombre completo del cliente
+          example: "Juan Pérez"
+        phone:
+          type: string
+          description: Teléfono de contacto
+          example: "+51987654321"
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: Correo electrónico (opcional)
+          example: "juan.perez@example.com"
+
+    ErrorResponse:
+      type: object
+      description: Respuesta estándar de error
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Código de error interno
+          example: "ORDER_ALREADY_PROCESSED"
+        message:
+          type: string
+          description: Descripción legible del error
+          example: "La orden ya fue aceptada o rechazada previamente"
+
+  securitySchemes:
+    providerHeader:
+      type: apiKey
+      in: header
+      name: X-Provider-Id
+      description: >
+        Identificador único del proveedor autenticado. Es inyectado por la capa de
+        autenticación preexistente (API Gateway u otro mecanismo) antes de que la
+        solicitud llegue a este servicio. Requerido en todos los endpoints.

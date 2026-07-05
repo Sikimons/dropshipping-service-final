@@ -75,9 +75,9 @@ El proveedor revisa una orden asignada y decide rechazarla. Ingresa el motivo de
 - **FR-002**: Cada orden mostrada DEBE incluir: código de producto, descripción del producto, cantidad solicitada, dirección completa de entrega, nombre y datos de contacto del cliente, fecha esperada de entrega y condiciones especiales.
 - **FR-003**: El proveedor DEBE poder aceptar una orden en estado "Pendiente" proporcionando una fecha estimada de despacho futura.
 - **FR-004**: Al aceptar, el sistema DEBE cambiar el estado de la orden a "Aceptado", registrar el identificador del proveedor que realizó la acción y el timestamp exacto de la operación.
-- **FR-005**: El cambio de estado a "Aceptado" DEBE ser visible para el analista sin necesidad de recargar la página o con una latencia máxima de 5 segundos.
+- **FR-005**: El cambio de estado a "Aceptado" DEBE ser accesible para el analista mediante consulta REST al endpoint de órdenes dentro de los 5 segundos posteriores a la acción del proveedor. La visibilidad se satisface mediante polling periódico; no se requiere mecanismo push en esta versión (ver SC-003).
 - **FR-006**: El proveedor DEBE poder rechazar una orden en estado "Pendiente" proporcionando un motivo de rechazo no vacío.
-- **FR-007**: Al rechazar, el sistema DEBE cambiar el estado de la orden a "Rechazado" y enviar una alerta al equipo comercial dentro de los 60 segundos siguientes.
+- **FR-007**: Al rechazar, el sistema DEBE cambiar el estado de la orden a "Rechazado", registrar el identificador del proveedor que realizó la acción y el timestamp exacto de la operación, y enviar una alerta al equipo comercial dentro de los 60 segundos siguientes.
 - **FR-008**: La alerta al equipo comercial DEBE contener: código de orden, nombre del cliente, producto solicitado y motivo de rechazo.
 - **FR-009**: El sistema DEBE impedir que un proveedor acceda, acepte o rechace órdenes no asignadas a él.
 - **FR-010**: El sistema DEBE impedir que una orden ya en estado "Aceptado" o "Rechazado" sea modificada nuevamente.
@@ -95,7 +95,7 @@ El proveedor revisa una orden asignada y decide rechazarla. Ingresa el motivo de
 
 - **SC-001**: El proveedor puede visualizar todas sus órdenes asignadas en menos de 3 segundos desde el acceso al portal.
 - **SC-002**: El proveedor puede completar la acción de aceptar o rechazar una orden en menos de 2 minutos.
-- **SC-003**: Los cambios de estado (Aceptado/Rechazado) son visibles para el analista en menos de 5 segundos tras la acción del proveedor.
+- **SC-003**: Los cambios de estado (Aceptado/Rechazado) son accesibles para el analista en menos de 5 segundos tras la acción del proveedor mediante polling REST (ver FR-005). No se requiere mecanismo push en v1.
 - **SC-004**: El equipo comercial recibe la alerta de rechazo en menos de 60 segundos tras la acción del proveedor.
 - **SC-005**: El 100% de las órdenes asignadas muestran todos los campos requeridos por FR-002.
 - **SC-006**: Cero órdenes de otros proveedores son accesibles o modificables por un proveedor no asignado.
@@ -108,3 +108,5 @@ El proveedor revisa una orden asignada y decide rechazarla. Ingresa el motivo de
 - El "analista" accede al portal a través de un rol diferente al de proveedor, con una vista propia del estado de las órdenes.
 - Una orden puede estar en uno de tres estados mutuamente excluyentes: Pendiente, Aceptado, Rechazado. No existen subestados en el alcance de esta feature.
 - El soporte para dispositivos móviles queda fuera del alcance de esta feature (v1 es portal web de escritorio).
+- La identidad del proveedor autenticado se transmite mediante el header HTTP `X-Provider-Id`, inyectado por la capa de autenticación preexistente (API Gateway). Este servicio confía en dicho header sin re-validar credenciales.
+- SC-003 se satisface mediante polling REST: el analista consulta el endpoint `GET /providers/{providerId}/orders` periódicamente con un intervalo ≤ 5 segundos. No se implementa WebSocket ni SSE en esta versión.

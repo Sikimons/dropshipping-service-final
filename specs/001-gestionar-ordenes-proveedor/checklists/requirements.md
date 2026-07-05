@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Ver y Gestionar Órdenes Asignadas
+/# Specification Quality Checklist: Ver y Gestionar Órdenes Asignadas
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-07-04
