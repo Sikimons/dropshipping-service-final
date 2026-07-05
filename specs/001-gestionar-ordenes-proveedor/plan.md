@@ -174,3 +174,27 @@ SQL scripts (Spring Boot auto-init); no `DataLoader` bean needed. Tests organize
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|--------------------------------------|
 | — | — | — |
+
+---
+
+## Edge Case Decisions
+
+### EC-02 — Fallo del sistema de alertas al rechazar *(resolved)*
+
+**Decision**: Fail-open — el rechazo persiste aunque `NotifyRejectionPort` lance una excepción en tiempo de ejecución.
+
+**Rationale**: El cambio de estado de la orden a `RECHAZADO` es la operación primaria y debe completarse independientemente del canal de notificación. La alerta al equipo comercial es un efecto secundario de calidad de servicio (SC-004 / FR-007). Bloquear o revertir el rechazo ante un fallo de notificación genera una experiencia operativa degradada sin beneficio de consistencia de negocio. YAGNI descarta mecanismos de retry/outbox en esta versión.
+
+**Implementation impact**: `RejectOrderService` envuelve la llamada a `notifyRejectionPort.notifyRejection(event)` en un bloque `try-catch (RuntimeException)` que registra `WARN` con el error y no relanza la excepción. La persistencia del rechazo (`saveOrderPort.save(order)`) ocurre antes de la notificación y no forma parte de la misma transacción de notificación.
+
+**Test required**: `rejectOrder_whenNotificationFails_rejectionStillPersists` en `RejectOrderServiceTest` (ver T057).
+
+---
+
+### EC-04 — Acceso concurrente a la misma orden *(resolved)*
+
+**Decision**: Optimistic locking vía `@Version` (ya configurado en `OrderJpaEntity`). Si dos sesiones concurrentes intentan procesar la misma orden, la segunda recibe HTTP 409 con código `CONCURRENT_MODIFICATION`.
+
+**Rationale**: El campo `version BIGINT NOT NULL DEFAULT 0` ya existe en `schema.sql` y `OrderJpaEntity` ya declara `@Version`. Spring Data JPA lanza `ObjectOptimisticLockingFailureException` automáticamente cuando el número de versión no coincide. No se requiere ningún cambio en el modelo de datos ni en la capa de dominio. Solo falta capturar la excepción en `GlobalExceptionHandler` y agregar el código de error al contrato OpenAPI (el HTTP 409 ya está documentado en ambos endpoints).
+
+**Implementation impact**: Agregar `@ExceptionHandler(ObjectOptimisticLockingFailureException.class)` en `GlobalExceptionHandler` → HTTP 409 `ErrorResponse("CONCURRENT_MODIFICATION", "La orden fue modificada concurrentemente; reintente la operación")`. Actualizar el contrato OpenAPI con el nuevo código de error en las respuestas 409 de accept y reject. Cubrir `Order.getVersion()` en `OrderTest` (actualmente 0%).

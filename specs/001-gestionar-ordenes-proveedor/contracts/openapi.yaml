@@ -151,14 +151,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         "409":
-          description: Conflicto — la orden ya fue procesada (no está en PENDIENTE)
+          description: >
+            Conflicto — la orden ya fue procesada (no está en PENDIENTE) o fue
+            modificada concurrentemente por otra sesión.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                code: "ORDER_ALREADY_PROCESSED"
-                message: "La orden ya fue aceptada o rechazada previamente"
+              examples:
+                alreadyProcessed:
+                  summary: Orden ya procesada
+                  value:
+                    code: "ORDER_ALREADY_PROCESSED"
+                    message: "La orden ya fue aceptada o rechazada previamente"
+                concurrentModification:
+                  summary: Modificación concurrente (optimistic lock)
+                  value:
+                    code: "CONCURRENT_MODIFICATION"
+                    message: "La orden fue modificada concurrentemente; reintente la operación"
 
   /orders/{orderId}/reject:
     put:
@@ -226,11 +236,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         "409":
-          description: Conflicto — la orden ya fue procesada
+          description: >
+            Conflicto — la orden ya fue procesada (no está en PENDIENTE) o fue
+            modificada concurrentemente por otra sesión.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                alreadyProcessed:
+                  summary: Orden ya procesada
+                  value:
+                    code: "ORDER_ALREADY_PROCESSED"
+                    message: "La orden ya fue aceptada o rechazada previamente"
+                concurrentModification:
+                  summary: Modificación concurrente (optimistic lock)
+                  value:
+                    code: "CONCURRENT_MODIFICATION"
+                    message: "La orden fue modificada concurrentemente; reintente la operación"
 
 components:
   schemas:

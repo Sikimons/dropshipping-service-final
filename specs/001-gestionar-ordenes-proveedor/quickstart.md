@@ -135,6 +135,54 @@ curl -s -X PUT http://localhost:8080/api/v1/orders/$ORDER_ID_2/reject \
 
 ---
 
+---
+
+## Scenario 4 — Fallo del sistema de alertas al rechazar (EC-02)
+
+**Objetivo**: Verificar que el rechazo persiste aunque el canal de notificación falle.
+
+Este edge case se valida mediante test unitario (`RejectOrderServiceTest`), no manualmente, ya que el `LogNotificationAdapter` de v1 no puede fallar en condiciones normales.
+
+```bash
+# Ejecutar el test de regresión de EC-02
+./gradlew test --tests "*RejectOrderServiceTest.rejectOrder_whenNotificationFails*"
+```
+
+**Resultado esperado**: El test pasa — `saveOrderPort.save()` fue invocado y ninguna excepción propagó al llamador.
+
+**Comportamiento en producción**: Si el canal real de notificación no está disponible, el servidor registra una línea `WARN [COMMERCIAL-ALERT-FAILED]` en el log. La orden queda en estado `RECHAZADO`. El equipo operacional puede reprocesar las notificaciones fallidas consultando el log.
+
+---
+
+## Scenario 5 — Acceso concurrente a la misma orden (EC-04)
+
+**Objetivo**: Verificar que dos sesiones concurrentes no corrompen el estado de una orden.
+
+La protección se basa en optimistic locking (`@Version` en `OrderJpaEntity`). Se valida con test automatizado:
+
+```bash
+# Ejecutar el test de regresión de EC-04
+./gradlew test --tests "*OrderControllerIT.acceptOrder_whenConcurrentModification*"
+```
+
+**Resultado esperado**: HTTP 409 con cuerpo `{ "code": "CONCURRENT_MODIFICATION", "message": "La orden fue modificada concurrentemente; reintente la operación" }`.
+
+**Simulación manual (requiere dos terminales)**:
+
+```bash
+# Terminal 1 y Terminal 2 — ejecutar casi simultáneamente
+ORDER_ID="550e8400-e29b-41d4-a716-446655440000"
+
+curl -s -X PUT http://localhost:8080/api/v1/orders/$ORDER_ID/accept \
+  -H "Content-Type: application/json" \
+  -H "X-Provider-Id: prov-001" \
+  -d '{"estimatedDispatchDate": "2026-07-10"}'
+```
+
+Uno de los dos recibirá HTTP 200; el otro recibirá HTTP 409 `CONCURRENT_MODIFICATION` (si el race condition se produce) o HTTP 409 `ORDER_ALREADY_PROCESSED` (si el primero ya committeó antes de que el segundo cargara la orden). Ambos códigos 409 son respuestas correctas.
+
+---
+
 ## BDD Test Execution
 
 Los escenarios anteriores están automatizados como pruebas Cucumber en:

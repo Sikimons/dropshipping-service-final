@@ -1,5 +1,7 @@
 package org.ups.dropshippingservice.application.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.ups.dropshippingservice.application.exception.OrderNotFoundException;
 import org.ups.dropshippingservice.application.port.in.RejectOrderUseCase;
@@ -14,6 +16,8 @@ import java.util.UUID;
 
 @Service
 public class RejectOrderService implements RejectOrderUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(RejectOrderService.class);
 
     private final LoadOrderPort loadOrderPort;
     private final SaveOrderPort saveOrderPort;
@@ -46,7 +50,12 @@ public class RejectOrderService implements RejectOrderUseCase {
                 rejectionReason,
                 Instant.now()
         );
-        notifyRejectionPort.notifyRejection(event);
+        try {
+            notifyRejectionPort.notifyRejection(event);
+        } catch (RuntimeException e) {
+            log.warn("[COMMERCIAL-ALERT-FAILED] Could not notify rejection for order {}: {}",
+                    saved.getOrderCode(), e.getMessage());
+        }
 
         return saved;
     }

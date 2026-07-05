@@ -24,8 +24,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,6 +88,21 @@ class RejectOrderServiceTest {
 
         assertThatThrownBy(() -> service.rejectOrder(orderId, "prov-001", "reason"))
                 .isInstanceOf(OrderNotFoundException.class);
+    }
+
+    @Test
+    void rejectOrder_whenNotificationFails_rejectionStillPersists() {
+        UUID orderId = UUID.randomUUID();
+        Order order = buildOrder(orderId, "prov-001", OrderStatus.PENDIENTE);
+        when(loadOrderPort.findByIdAndProviderId(orderId, "prov-001")).thenReturn(Optional.of(order));
+        when(saveOrderPort.save(any())).thenReturn(order);
+        doThrow(new RuntimeException("Notification service unavailable"))
+                .when(notifyRejectionPort).notifyRejection(any());
+
+        assertThatCode(() -> service.rejectOrder(orderId, "prov-001", "No stock"))
+                .doesNotThrowAnyException();
+
+        verify(saveOrderPort).save(order);
     }
 
     private Order buildOrder(UUID id, String providerId, OrderStatus status) {

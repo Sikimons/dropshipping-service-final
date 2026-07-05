@@ -173,6 +173,18 @@ description: "Task list for US-01 — Ver y Gestionar Órdenes Asignadas"
 
 ---
 
+## Phase 7: Edge Case Coverage
+
+**Purpose**: Cubrir los dos edge cases del spec (EC-02 y EC-04) que quedaron sin cobertura de prueba tras la implementación inicial.
+
+- [X] T057 [EC-02] In `RejectOrderService.java`, wrap the call to `notifyRejectionPort.notifyRejection(event)` in a `try-catch (RuntimeException e)` block that logs `log.warn("[COMMERCIAL-ALERT-FAILED] Could not notify rejection for order {}: {}", order.getOrderCode(), e.getMessage())` and does NOT re-throw. Then add test `rejectOrder_whenNotificationFails_rejectionStillPersists` to `RejectOrderServiceTest.java`: configure `notifyRejectionPort` mock to throw `new RuntimeException("service unavailable")`; invoke `rejectOrderService.rejectOrder(...)`; verify `saveOrderPort.save()` was invoked exactly once (order state persisted); assert no exception is thrown from the service method in `src/main/java/org/ups/dropshippingservice/application/service/RejectOrderService.java` and `src/test/java/org/ups/dropshippingservice/application/RejectOrderServiceTest.java`
+
+- [X] T058 [EC-04] Add `@ExceptionHandler(ObjectOptimisticLockingFailureException.class)` to `GlobalExceptionHandler.java` that returns `ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("CONCURRENT_MODIFICATION", "La orden fue modificada concurrentemente; reintente la operación"))`. Add test `acceptOrder_whenConcurrentModification_returns409` to `OrderControllerIT.java`: configure `acceptOrderUseCase` mock to throw `new ObjectOptimisticLockingFailureException(Order.class, UUID.randomUUID())`; assert HTTP 409 and `code == "CONCURRENT_MODIFICATION"`. Add test `getVersion_returnsInitialVersion` to `OrderTest.java`: build an `Order` instance and assert `getVersion() == 0` to bring `version` field coverage above zero in `src/main/java/org/ups/dropshippingservice/adapter/in/web/GlobalExceptionHandler.java`, `src/test/java/org/ups/dropshippingservice/adapter/web/OrderControllerIT.java`, and `src/test/java/org/ups/dropshippingservice/domain/OrderTest.java`
+
+**Checkpoint**: `./gradlew test` green — EC-02 and EC-04 tests pass; `Order.getVersion()` coverage > 0%; global JaCoCo coverage ≥ 80% maintained.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

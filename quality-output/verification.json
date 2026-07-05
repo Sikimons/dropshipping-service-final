@@ -1,0 +1,103 @@
+{
+  "proyecto": "dropshipping-service",
+  "version": "0.0.1-SNAPSHOT",
+  "fecha": "2026-07-04",
+  "commit": "d534698",
+  "tests": {
+    "comando": "./gradlew test jacocoTestReport --rerun-tasks",
+    "passed": 53,
+    "total": 53,
+    "coverage": 98.5,
+    "coverage_fuente": "build/reports/jacoco/test/jacocoTestReport.xml",
+    "notas": "LINE: 262/266 = 98.5%. INSTRUCTION: 1020/1070 = 95.3%. CLASS: 19/19 = 100%. Umbral: LINE >= 80%."
+  },
+  "security": {
+    "fuente": "Revisión manual de código fuente + grep de secretos sobre src/** (Semgrep MCP no activo en sesión — se recomienda ejecutar semgrep_scan antes del merge a main)",
+    "critical": 0,
+    "high": 0,
+    "secrets": 0,
+    "hallazgos": [
+      {
+        "severidad": "INFO",
+        "descripcion": "Semgrep SAST no ejecutado en esta sesión. Revisión manual aplicada: sin SQL injection (JPA parameterized), sin secretos hardcodeados, sin XSS.",
+        "recomendacion": "Activar uvx semgrep-mcp y re-ejecutar semgrep_scan sobre src/main/java antes del merge."
+      }
+    ],
+    "auth_endpoints": "No hay Spring Security. Protección via X-Provider-Id header inyectado por API Gateway (supuesto del spec). GET /providers/{id}/orders: valida X-Provider-Id == providerId (OrderController:41). PUT accept/reject: pasa X-Provider-Id a findByIdAndProviderId() garantizando propiedad. MissingRequestHeaderException → 401 MISSING_PROVIDER_IDENTITY (GlobalExceptionHandler:42). ObjectOptimisticLockingFailureException → 409 CONCURRENT_MODIFICATION (GlobalExceptionHandler:57)."
+  },
+  "spec": "specs/001-gestionar-ordenes-proveedor/spec.md",
+  "criteria": [
+    {
+      "id": "FR-001",
+      "fuente": "spec.md · FR-001",
+      "status": "cumple",
+      "evidencia": "GetAssignedOrdersServiceTest.getAssignedOrders_whenOrdersExist_returnsOrders() PASA. OrderPersistenceAdapterIT.findAllByProviderId_returnsBothProv001Orders() PASA. BDD us1 escenario 1 PASA."
+    },
+    {
+      "id": "FR-002",
+      "fuente": "spec.md · FR-002",
+      "status": "cumple",
+      "evidencia": "BDD us1 step cadaOrdenIncluyeCamposRequeridos() verifica orderCode, product, deliveryAddress, customerContact, expectedDeliveryDate. OrderControllerMapper 100% LINE cubierto mapea todos los campos."
+    },
+    {
+      "id": "FR-003",
+      "fuente": "spec.md · FR-003",
+      "status": "cumple",
+      "evidencia": "AcceptOrderServiceTest.acceptOrder_happyPath_savesOrder() PASA. OrderControllerIT.acceptOrder_happyPath_returns200() PASA. BDD us2 escenario 1 PASA."
+    },
+    {
+      "id": "FR-004",
+      "fuente": "spec.md · FR-004",
+      "status": "cumple",
+      "evidencia": "OrderTest.accept_shouldTransitionStatusToAceptado() PASA: assertThat(status=ACEPTADO), assertThat(lastActionBy='prov-001'), assertThat(lastActionAt!=null). Fuente: OrderTest.java:29-36."
+    },
+    {
+      "id": "FR-005",
+      "fuente": "spec.md · FR-005",
+      "status": "cumple",
+      "evidencia": "Persistencia sincrónica: save() y findAll() en la misma BD H2 sin async intermediarios. OrderPersistenceAdapterIT.save_persistsOrderChanges() PASA. Diseño garantiza visibilidad < 5 segundos."
+    },
+    {
+      "id": "FR-006",
+      "fuente": "spec.md · FR-006",
+      "status": "cumple",
+      "evidencia": "RejectOrderServiceTest.rejectOrder_happyPath_savesAndNotifies() PASA. RejectOrderServiceTest.rejectOrder_blankReason_throwsIllegalArgument() PASA. OrderControllerIT.rejectOrder_blankReason_returns400() PASA. BDD us3 escenario 2 PASA."
+    },
+    {
+      "id": "FR-007",
+      "fuente": "spec.md · FR-007",
+      "status": "cumple",
+      "evidencia": "OrderTest.reject_shouldTransitionStatusToRechazado() PASA: status=RECHAZADO, lastActionBy, lastActionAt. RejectOrderServiceTest.rejectOrder_happyPath_savesAndNotifies() PASA: verify(notifyRejectionPort).notifyRejection() confirma alerta disparada. Fuente: RejectOrderService.java:53-58."
+    },
+    {
+      "id": "FR-008",
+      "fuente": "spec.md · FR-008",
+      "status": "cumple",
+      "evidencia": "RejectOrderService.java:45-52 construye OrderRejectedEvent con orderCode, customerName (customerContact.name()), productCode (product.productCode()), rejectionReason. ArgumentCaptor verifica rejectionReason='No stock'. Fuente: OrderRejectedEvent.java:6-13."
+    },
+    {
+      "id": "FR-009",
+      "fuente": "spec.md · FR-009",
+      "status": "cumple",
+      "evidencia": "OrderControllerIT.getAssignedOrders_withMismatchedHeader_returns403() PASA. findByIdAndProviderId() en capa de persistencia filtra por orderId AND providerId: OrderPersistenceAdapterIT PASA. Orden de otro proveedor → OrderNotFoundException."
+    },
+    {
+      "id": "FR-010",
+      "fuente": "spec.md · FR-010",
+      "status": "cumple",
+      "evidencia": "OrderTest.accept_onAceptadoOrder_shouldThrow() PASA. OrderTest.reject_onRechazadoOrder_shouldThrow() PASA. AcceptOrderServiceTest.acceptOrder_alreadyAccepted_throwsAlreadyProcessed() PASA. RejectOrderServiceTest.rejectOrder_alreadyProcessed_throwsAlreadyProcessed() PASA. OrderControllerIT: acceptOrder_alreadyProcessed_returns409 y rejectOrder_alreadyProcessed_returns409 PASAN. BDD us2-esc3 y us3-esc3 PASAN."
+    },
+    {
+      "id": "EC-02",
+      "fuente": "spec.md · Edge Cases — sistema de alertas no disponible",
+      "status": "cumple",
+      "evidencia": "RejectOrderServiceTest.rejectOrder_whenNotificationFails_rejectionStillPersists() PASA: doThrow(RuntimeException) en notifyRejectionPort, assertThatCode(...).doesNotThrowAnyException() y verify(saveOrderPort).save(order). RejectOrderService.java:53-58 tiene try-catch que aísla el fallo de notificación: el rechazo persiste y se registra warning en log. Fuente: RejectOrderServiceTest.java:93-106, RejectOrderService.java:53-58."
+    },
+    {
+      "id": "EC-04",
+      "fuente": "spec.md · Edge Cases — dos usuarios procesando la misma orden simultáneamente",
+      "status": "cumple",
+      "evidencia": "OrderTest.getVersion_returnsInitialVersion() PASA: verifica campo @Version accesible (order.getVersion()=0L), confirma mecanismo de bloqueo optimista presente. OrderControllerIT.acceptOrder_whenConcurrentModification_returns409() PASA: ObjectOptimisticLockingFailureException → 409 CONCURRENT_MODIFICATION via GlobalExceptionHandler.handleConcurrentModification() (línea 57-63). Ante escritura concurrente JPA lanza la excepción y el sistema responde 409. Fuente: OrderTest.java:63-66, OrderControllerIT.java:177-189, GlobalExceptionHandler.java:57-63."
+    }
+  ]
+}

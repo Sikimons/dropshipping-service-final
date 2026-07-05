@@ -59,4 +59,9 @@ class OrderTest {
         assertThatThrownBy(() -> order.reject("Another reason", "prov-001"))
                 .isInstanceOf(OrderAlreadyProcessedException.class);
     }
+
+    @Test
+    void getVersion_returnsInitialVersion() {
+        assertThat(order.getVersion()).isEqualTo(0L);
+    }
 }

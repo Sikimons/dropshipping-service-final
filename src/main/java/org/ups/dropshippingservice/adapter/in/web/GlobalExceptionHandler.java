@@ -2,6 +2,7 @@ package org.ups.dropshippingservice.adapter.in.web;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -51,5 +52,13 @@ public class GlobalExceptionHandler {
         error.setCode("REJECTION_REASON_REQUIRED");
         error.setMessage(ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrentModification(ObjectOptimisticLockingFailureException ex) {
+        ErrorResponse error = new ErrorResponse();
+        error.setCode("CONCURRENT_MODIFICATION");
+        error.setMessage("La orden fue modificada concurrentemente; reintente la operación");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 }

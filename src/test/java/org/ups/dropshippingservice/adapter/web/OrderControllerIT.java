@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.ups.dropshippingservice.adapter.in.web.GlobalExceptionHandler;
 import org.ups.dropshippingservice.adapter.in.web.OrderController;
 import org.ups.dropshippingservice.adapter.in.web.OrderControllerMapper;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.ups.dropshippingservice.application.exception.InvalidDispatchDateException;
 import org.ups.dropshippingservice.application.exception.OrderAlreadyProcessedException;
 import org.ups.dropshippingservice.application.exception.OrderNotFoundException;
@@ -171,6 +172,20 @@ class OrderControllerIT {
                         .content("{\"estimatedDispatchDate\":\"2026-12-01\"}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    void acceptOrder_whenConcurrentModification_returns409() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        when(acceptOrderUseCase.acceptOrder(eq(orderId), eq("prov-001"), any()))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Order.class, orderId));
+
+        mockMvc.perform(put("/api/v1/orders/" + orderId + "/accept")
+                        .header("X-Provider-Id", "prov-001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estimatedDispatchDate\":\"2026-12-01\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
     }
 
     private Order buildOrder(UUID id, String providerId, OrderStatus status) {
